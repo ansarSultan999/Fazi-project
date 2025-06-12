@@ -48,7 +48,7 @@ function AdminDashboard() {
       setProviders(providersData);
     } catch (error) {
       console.error("Error fetching providers:", error);
-      toast.error("Failed to load providers");
+      toast.error("Failed to load provider");
     } finally {
       setLoading(false);
     }
