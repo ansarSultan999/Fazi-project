@@ -178,16 +178,16 @@ export const createProviderCard = async (providerId, cardData) => {
 // Get all cards for a provider
 export const getProviderCards = async (providerId) => {
   try {
-    const q = query(
-      collection(db, "providerCards"),
-      where("providerId", "==", providerId)
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-  } catch (error) {
+   const q = query(
+    collection(db, "providerCards"),
+    where("providerId", "==", providerId)
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  }));
+} catch (error) {
     console.error("Error fetching provider cards:", error);
     throw error;
   }

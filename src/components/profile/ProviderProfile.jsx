@@ -17,7 +17,8 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { getProviderById, logProfileView, getProviderReviews, addProviderReview } from '../../services/providers';
 import { createRequest, checkExistingRequest, getUserRequests } from '../../services/requests';
-
+import { CreditCard, Banknote, Wallet } from 'lucide-react';
+import { loadStripe } from '@stripe/stripe-js';
 import RequestModal from '../shared/RequestModal';
 
 function ProviderProfile() {
@@ -35,6 +36,119 @@ function ProviderProfile() {
   const { id } = useParams();
   const { currentUser, userDetails } = useAuth();
   
+
+// Payment method state and modal logic are defined near the top of the ProviderProfile component:
+const [paymentMethod, setPaymentMethod] = useState('');
+const [paymentAmount, setPaymentAmount] = useState('');
+const [showPaymentModal, setShowPaymentModal] = useState(false);
+const [paymentLoading, setPaymentLoading] = useState(false);
+
+
+
+
+
+
+
+// Stripe payment handler
+const handleStripePayment = async () => {
+  setPaymentLoading(true);
+  try {
+    const stripe = await loadStripe('YOUR_STRIPE_PUBLIC_KEY');
+    const response = await fetch('/create-stripe-session', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount: paymentAmount,
+        providerId: provider.id,
+        userId: currentUser.uid
+      }),
+    });
+
+    const session = await response.json();
+
+    const result = await stripe.redirectToCheckout({
+      sessionId: session.id
+    });
+
+    if (result.error) {
+      toast.error(result.error.message);
+    }
+  } catch (error) {
+    toast.error("Stripe payment failed.");
+  } finally {
+    setPaymentLoading(false);
+  }
+};
+
+// Add this to your handlePaymentSubmit function for Razorpay
+const loadRazorpay = () => {
+  return new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
+
+const handleRazorpayPayment = async () => {
+  const loaded = await loadRazorpay();
+  if (!loaded) {
+    toast.error('Razorpay SDK failed to load');
+    return;
+  }
+
+  const options = {
+    key: 'YOUR_RAZORPAY_KEY',
+    amount: paymentAmount * 100, // in paise
+    currency: 'INR',
+    name: provider.name,
+    description: 'Service Payment',
+    handler: function(response) {
+      toast.success(`Payment ID: ${response.razorpay_payment_id}`);
+    },
+    prefill: {
+      name: currentUser.displayName,
+      email: currentUser.email,
+    }
+  };
+
+  const rzp = new window.Razorpay(options);
+  rzp.open();
+};
+// Add this payment handler function
+const handlePaymentSubmit = async () => {
+  if (!paymentMethod || !paymentAmount) {
+    toast.error("Please select payment method and enter amount");
+    return;
+  }
+
+  setPaymentLoading(true);
+  try {
+    if (paymentMethod === 'credit_card') {
+      await handleStripePayment();
+      setShowPaymentModal(false);
+      setPaymentAmount('');
+      setPaymentMethod('');
+      return;
+    }
+    // In a real app, you would call your payment API here
+    // This is just a simulation
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    toast.success(`Payment of ₹${paymentAmount} processed via ${paymentMethod}`);
+    setShowPaymentModal(false);
+    setPaymentAmount('');
+    setPaymentMethod('');
+  } catch (error) {
+    toast.error("Payment failed. Please try again.");
+  } finally {
+    setPaymentLoading(false);
+  }
+};
+
   useEffect(() => {
     fetchProvider();
     if (currentUser && id) {
@@ -472,12 +586,105 @@ function ProviderProfile() {
                     </div>
                   )}
                 </div>
+
+                {/* Payment Section: Add this block to always show the payment button in the sidebar */}
+                <div className="bg-white border border-gray-200 rounded-lg p-6 mt-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Make a Payment</h3>
+                  <p className="text-gray-600 mb-4">
+                    Secure payment to book this service provider
+                  </p>
+                  <button
+                    onClick={() => setShowPaymentModal(true)}
+                    className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700"
+                  >
+                    Pay Now
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
       
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-xl font-bold mb-4">Make Payment</h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Amount (₹)
+              </label>
+              <input
+                type="number"
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount(e.target.value)}
+                className="w-full border rounded px-3 py-2"
+                placeholder="Enter amount"
+              />
+            </div>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Payment Method
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setPaymentMethod('credit_card')}
+                  className={`flex items-center justify-center p-3 border rounded-lg ${
+                    paymentMethod === 'credit_card' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300'
+                  }`}
+                >
+                  <CreditCard className="h-5 w-5 mr-2" />
+                  Credit Card
+                </button>
+                <button
+                  onClick={() => setPaymentMethod('paypal')}
+                  className={`flex items-center justify-center p-3 border rounded-lg ${
+                    paymentMethod === 'paypal' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300'
+                  }`}
+                >
+                  <CreditCard className="h-5 w-5 mr-2" />
+                  PayPal
+                </button>
+                <button
+                  onClick={() => setPaymentMethod('upi')}
+                  className={`flex items-center justify-center p-3 border rounded-lg ${
+                    paymentMethod === 'upi' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300'
+                  }`}
+                >
+                  <Wallet className="h-5 w-5 mr-2" />
+                  UPI
+                </button>
+                <button
+                  onClick={() => setPaymentMethod('bank_transfer')}
+                  className={`flex items-center justify-center p-3 border rounded-lg ${
+                    paymentMethod === 'bank_transfer' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300'
+                  }`}
+                >
+                  <Banknote className="h-5 w-5 mr-2" />
+                  Bank Transfer
+                </button>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowPaymentModal(false)}
+                className="px-4 py-2 border rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePaymentSubmit}
+                disabled={paymentLoading}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {paymentLoading ? 'Processing...' : 'Make Payment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Request Contact Modal */}
       {provider && (
         <RequestModal 
