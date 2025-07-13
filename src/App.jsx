@@ -17,7 +17,7 @@ import AdminDashboard from './components/dashboard/AdminDashboard';
 import ProfileForm from './components/profile/ProfileForm';
 import ProviderProfile from './components/profile/ProviderProfile';
 import UserRequests from './components/requests/UserRequests';
-
+import TawkToWidget from "./components/shared/ChatWidget";
 // Custom Login wrapper to redirect after login
 function LoginWithRedirect() {
   const { currentUser, userDetails, loading } = useAuth();
@@ -48,6 +48,7 @@ function App() {
       <AuthProvider>
         <LocationProvider>
           <div className="flex flex-col min-h-screen bg-gray-50">
+            <TawkToWidget />
             <Navbar />
             <main className="flex-grow">
               <Routes>
